@@ -11,19 +11,9 @@ def sum_range(buffer, start, end):
 def calculate_ranges(buffer, ranges):
     sum = 0
     for range in ranges:
+        print("  range start: " + hex(range[0]) + ", end: " + hex(range[1]))
         sum += sum_range(buffer, range[0], range[1])
     return sum % 2**16
-
-regions = [
-    ("Main", 0x500, [(0, 0x4000), (0x20000, 0x7FFFD)]),
-    ("Engine Calibration", 0x8000, [(0x8000, 0x14000)]),
-    ("Engine Diagnostics", 0x14000, [(0x14000, 0x16E00)]),
-    ("Transmission Calibration", 0x16E00, [(0x16E00, 0x1BE00)]),
-    ("Transmission Diagnostics", 0x1BE00, [(0x1BE00, 0x1C800)]),
-    ("Fuel System", 0x1C800, [(0x1C800, 0x1E520)]),
-    ("Vehicle System", 0x1E520, [(0x1E520, 0x1EEA0)]),
-    ("VSS", 0x1EEA0, [(0x1EEA0, 0x1EFA0)])
-]
 
 def correct_region(data, region):
     print("Correcting region \"" + region[0] + "\"")
@@ -49,7 +39,7 @@ def correct_region(data, region):
         return True
 
 
-def correct(data):
+def correct(data, regions):
     """Corrects all regions"""
     success = True
     for region in regions:
@@ -57,6 +47,17 @@ def correct(data):
             success = False
     return success
 
+def get_regions(data):
+    # Get regions from file
+    table_addr = 0x514
+    regions = [("Main", 0x500, [(0, 0x4000), (0x20000, 0x7FFFD)])]
+
+    region_names = ["Engine Calibration", "Engine Diagnostics", "Transmission Calibration", "Transmission Diagnostics", "Fuel System", "Vehicle System", "VSS"]
+    for i in range(0, len(region_names)):
+        (start_addr, end_addr) = struct.unpack_from(">LL", data, table_addr + i * 8)
+        regions.append((region_names[i], start_addr, [(start_addr, end_addr)]))
+    
+    return regions
 
 if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(description="Verify checksum of LS1 ROM")
@@ -70,6 +71,8 @@ if (__name__ == "__main__"):
     data = file.read()
     file.close()
 
+    regions = get_regions(data)
+
     if args.verify:
         for region in regions:
             print("Checking region " + region[0])
@@ -81,7 +84,7 @@ if (__name__ == "__main__"):
 
     elif args.correct != None:
         data = bytearray(data)
-        if not correct(data):
+        if not correct(data, regions):
             print("WARNING: Failed to correct at least one region")
         else:
             print("All checksums corrected and verified")
